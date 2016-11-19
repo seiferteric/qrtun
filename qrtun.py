@@ -5,7 +5,7 @@ import sys
 import select
 import signal
 import sdl2.ext
-from sdl2 import SDL_Event, SDL_PollEvent, SDL_QUIT, SDL_KEYDOWN, SDLK_ESCAPE
+from sdl2 import SDL_Event, SDL_PollEvent, SDL_QUIT, SDL_KEYDOWN, SDLK_ESCAPE, SDL_SetWindowFullscreen
 from sdl2.ext import Color
 import ctypes
 import os
@@ -49,6 +49,8 @@ class QRTun(object):
         self.running = False
         self.qr = qrtools.QR()
         self.vc = cv2.VideoCapture(0)
+        self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 720)
+        self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 1280)
     def read_tun(self):
         events = self.epoll.poll(0)
         if events:
@@ -69,7 +71,7 @@ class QRTun(object):
         #So I just add plus symbols as padding until they match, then strip
         # on the other side....
         while qr.data != qrb.data:
-            qr.pixel_size = 8
+            qr.pixel_size = 12
             qr.encode(self.outfile)
 
             qrb.decode(self.outfile)
