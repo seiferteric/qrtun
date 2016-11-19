@@ -49,6 +49,8 @@ class QRTun(object):
         events = self.epoll.poll(0)
         if events:
             self.outdata = self.tun.read(self.tun.mtu)
+            return True
+        return False
     def write_qrcode(self):
 
         #Base32 encode since alphanumeic qr code only allows A-Z, 0-9 and some
@@ -93,7 +95,6 @@ class QRTun(object):
             body   = base64.b32decode(qr.data.replace('/', '=').replace('+', ''))
             self.indata = {'body': body}
             self.write_tun()
-            #Have they ready my message already?
         except:
             pass
 
@@ -101,10 +102,8 @@ class QRTun(object):
     def run(self):
         self.running = True
         while self.running:
-            self.read_tun()
-            #Very inefficient right now, constantly rewriting qr code,
-            # even if nothing has changed....
-            self.write_qrcode()
+            if self.read_tun():
+                self.write_qrcode()
 
             rval, frame = self.vc.read()
             if not rval:
@@ -113,13 +112,9 @@ class QRTun(object):
             scipy.misc.toimage(frame).save(self.infile)
             self.read_qrcode()
 
-
-            sprite = factory.from_image(self.outfile)
-            #cam = factory.from_image(self.infile)
-            
-
-            # spriterenderer.render(cam)
-            spriterenderer.render(sprite)
+            if os.path.isfile(self.outfile):
+                sprite = factory.from_image(self.outfile)
+                spriterenderer.render(sprite)
             
             event = SDL_Event()
             while SDL_PollEvent(ctypes.byref(event)) != 0:
