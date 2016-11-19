@@ -30,3 +30,6 @@ Check out these vids!
 * [First Test](https://www.youtube.com/watch?v=E4qs1FmtDUA)
 * [Second](https://www.youtube.com/watch?v=kc9COP5dALU)
 * [SSH!](https://www.youtube.com/watch?v=N_Qr5AP_2wU)
+
+
+[Blog Post](http://seiferteric.com/?p=356)
