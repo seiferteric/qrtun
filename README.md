@@ -27,6 +27,7 @@ pip install git+https://github.com/primetang/qrtools.git
 
 Check out these vids!
 
+* [Without seq/ack](https://www.youtube.com/watch?v=_BUlrzEvwEE)
 * [First Test](https://www.youtube.com/watch?v=E4qs1FmtDUA)
 * [Second](https://www.youtube.com/watch?v=kc9COP5dALU)
 * [SSH!](https://www.youtube.com/watch?v=N_Qr5AP_2wU)
