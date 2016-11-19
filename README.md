@@ -7,12 +7,12 @@ Set up two linux PCs with a monitor and webcam facing eachother (a bit finicky t
 
 On the first computer:
 ```
-sudo python qrtun.py 1
+sudo python qrtun_async.py 1
 ```
 
 On the second:
 ```
-sudo python qrtun.py 2
+sudo python qrtun_async.py 2
 ```
 
 This will create a qrtun[1|2] interface with 10.0.8.[1|2] on each computer respectively. It will then start reading packets from that interface and show a qrcode in a window for the other to read. The data is base32 encoded due to limations in what characters you can encode in a alphanumeric qr code. Was going to use a tap device but had problems when packets were fragmented with pytun library, but just switched to a tun device and works now!
