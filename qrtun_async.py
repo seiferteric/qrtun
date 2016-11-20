@@ -53,8 +53,12 @@ class QRTun(object):
         return False
     def write_qrcode(self):
 
+        #Could not get binary mode working with qrtool library... so instead opt to
+        # use base32 for now, obviously binary would be better.
         #Base32 encode since alphanumeic qr code only allows A-Z, 0-9 and some
         # symbols, but base64 uses lowercase as well....
+        #Also alphanumeric mode does not support '=', so replace with '/' and
+        # switch back on the other side...
         body = base64.b32encode(self.outdata).replace('=', '/')
         qr = qrtools.QR()
         qrb = qrtools.QR()
