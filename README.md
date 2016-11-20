@@ -3,7 +3,7 @@ IP over qrcode
 
 This implements a tun interface to send biderectional data using qr codes displayed on your monitor and read using your webcam.
 
-Set up two linux PCs with a monitor and webcam facing eachother (a bit finicky to get aligned) and star the program:
+Set up two linux PCs with a monitor and webcam facing eachother (a bit finicky to get aligned) and start the program:
 
 On the first computer:
 ```
