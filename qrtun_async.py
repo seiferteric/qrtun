@@ -1,21 +1,16 @@
 import qrtools
+import pyqrcode
 from pytun import TunTapDevice, IFF_TAP, IFF_TUN, IFF_NO_PI
 import base64
 import sys
 import select
 import signal
-import sdl2.ext
-from sdl2 import SDL_Event, SDL_PollEvent, SDL_QUIT, SDL_KEYDOWN, SDLK_ESCAPE, SDL_SetWindowFullscreen
-from sdl2.ext import Color
-import ctypes
 import os
 import cv2
 import scipy.misc
+import StringIO
+import pygame
 SIZE = 1024
-window = sdl2.ext.Window("Hello World!", size=(SIZE, SIZE))
-
-factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE)
-spriterenderer = factory.create_sprite_render_system(window)
 
 class QRTun(object):
     def __init__(self, side):
@@ -35,7 +30,8 @@ class QRTun(object):
         self.epoll = select.epoll()
         self.epoll.register(self.tun.fileno(), select.EPOLLIN)
         self.tun.up()
-        self.outfile = 'resources/toscreen%d.png'%(self.side)
+        #self.outfile = 'resources/toscreen%d.png'%(self.side)
+        self.outfile = None
         self.infile = 'resources/toscreen%d.png'%(self.other_side)
         self.indata = None
         self.olddata = ""
@@ -45,6 +41,12 @@ class QRTun(object):
         self.vc = cv2.VideoCapture(0)
         self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 720)
         self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 1280)
+        pygame.init()
+        pygame.event.set_allowed(None)
+        pygame.event.set_allowed([pygame.KEYDOWN, pygame.QUIT])
+        self.screen = pygame.display.set_mode((SIZE, SIZE))
+        self.scale = 12
+        pygame.display.set_caption("qrtun - QR Code scale %d"%(self.scale))
     def read_tun(self):
         events = self.epoll.poll(0)
         if events:
@@ -59,23 +61,35 @@ class QRTun(object):
         # symbols, but base64 uses lowercase as well....
         #Also alphanumeric mode does not support '=', so replace with '/' and
         # switch back on the other side...
-        body = base64.b32encode(self.outdata).replace('=', '/')
-        qr = qrtools.QR()
-        qrb = qrtools.QR()
-        qrb.data = "  "
-        qr.data = body
+        #body = base64.b32encode(self.outdata).replace('=', '/')
+        #qr = qrtools.QR()
+        #qrb = qrtools.QR()
+        #qrb.data = "  "
+        #qr.data = body
+        code = pyqrcode.create(self.outdata, mode='binary', encoding='string_escape')
 
         #Had an issue where decoded data did not match encoded data...
         #So I just add plus symbols as padding until they match, then strip
         # on the other side....
-        while qr.data != qrb.data:
-            qr.pixel_size = 12
-            qr.encode(self.outfile)
+        #while self.outdata != qrb.data:
+        #    #qr.pixel_size = 12
+        #    #qr.encode(self.outfile)
+        self.outfile = StringIO.StringIO()
+        code.png(self.outfile, scale=self.scale)
+        self.outfile.seek(0)
 
-            qrb.decode(self.outfile)
-            if qrb.data != qr.data:
-                print("EncodingFailure", qr.data)
-                qr.data += '+'
+        #    qrb.decode(self.outfile)
+        #    if qrb.data != qr.data:
+        #        print("EncodingFailure", qr.data)
+        #        qr.data += '+'
+        if self.outfile and not self.outfile.closed:
+            #self.outfile = StringIO.StringIO(self.outfile.getvalue())
+            pimg = pygame.image.load(self.outfile)
+            if pimg.get_width() > self.screen.get_width() or pimg.get_height() > self.screen.get_height():
+                pygame.display.set_mode((pimg.get_width(), pimg.get_height()))
+            self.screen.fill((0,0,0))
+            self.screen.blit(pimg, (0,0))
+            pygame.display.flip()
 
 
         self.msg_read = False
@@ -95,8 +109,8 @@ class QRTun(object):
         try:
             if not qr.decode(self.infile):
                 return False
-
-            body   = base64.b32decode(qr.data.replace('/', '=').replace('+', ''))
+            #Hack to convert unicde to python string
+            body = qr.data.encode('latin-1')
             self.indata = {'body': body}
             self.write_tun()
         except:
@@ -116,22 +130,27 @@ class QRTun(object):
             scipy.misc.toimage(frame).save(self.infile)
             self.read_qrcode()
 
-            if os.path.isfile(self.outfile):
-                sprite = factory.from_image(self.outfile)
-                spriterenderer.render(sprite)
-            
-            event = SDL_Event()
-            while SDL_PollEvent(ctypes.byref(event)) != 0:
-              if event.type == SDL_QUIT:
-                self.running = False
-                break
-              elif event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_ESCAPE:
-                self.running = False
-                break
+               
 
-
+            event = pygame.event.poll()
+            if event.type == pygame.QUIT:
+                self.running = False
+                pygame.quit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False 
+                    pygame.quit()
+                elif event.key == pygame.K_UP:
+                    self.scale += 1
+                    pygame.display.set_caption("qrtun - QR Code scale %d"%(self.scale))
+                    self.write_qrcode()
+                elif event.key == pygame.K_DOWN:
+                    self.scale -= 1
+                    pygame.display.set_caption("qrtun - QR Code scale %d"%(self.scale))
+                    self.write_qrcode()
+ 
         try:
-            os.unlink(self.outfile)
+            #os.unlink(self.outfile)
             os.unlink(self.infile)
         except:
             pass
@@ -150,8 +169,11 @@ def main():
 
 
 
-    window.show()
-
+    try:
+        os.mkdir("resources")
+    except:
+        pass
+    
     tun.run()
     sys.exit(0)
 
