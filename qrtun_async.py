@@ -1,6 +1,6 @@
-import qrtools
 from pytun import TunTapDevice, IFF_TAP, IFF_TUN, IFF_NO_PI
-import base64
+from base64 import b32encode, b32decode
+import pyqrcode
 import sys
 import select
 import signal
@@ -10,6 +10,7 @@ import scipy.misc
 import StringIO
 import pygame
 import subprocess
+import zbar
 SIZE = 1024
 
 class QRTun(object):
@@ -26,7 +27,7 @@ class QRTun(object):
             self.other_side = 1
         self.tun.netmask = '255.255.255.0'
         #MTU must be set low enough to fit in a single qrcode
-        self.tun.mtu = 500
+        self.tun.mtu = 300
         self.epoll = select.epoll()
         self.epoll.register(self.tun.fileno(), select.EPOLLIN)
         self.tun.up()
@@ -37,10 +38,11 @@ class QRTun(object):
         self.olddata = ""
         self.outdata = ""
         self.running = False
-        self.qr = qrtools.QR()
         self.vc = cv2.VideoCapture(0)
         self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 720)
         self.vc.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 1280)
+        self.scanner = zbar.ImageScanner()
+        self.scanner.parse_config('enable')
         pygame.init()
         pygame.event.set_allowed(None)
         pygame.event.set_allowed([pygame.KEYDOWN, pygame.QUIT])
@@ -55,14 +57,18 @@ class QRTun(object):
         return False
     def write_qrcode(self):
 
-        p = subprocess.Popen(['qrencode', '-o', '-', '-s', str(self.scale), '-8'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        std_out, std_err = p.communicate(input=self.outdata)
-        if std_err:
-            raise Exception("qrencodeError", std_err.strip())
-        
 
-        self.outfile = StringIO.StringIO(std_out)
-        #code.png(self.outfile, scale=self.scale)
+        #Sadly qrencode does not support \0 in binary mode!!! So I had to disable it and use the slower pyqrtools instead!
+
+        #p = subprocess.Popen(['qrencode', '-o', '-', '-s', str(self.scale), '-8'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        #std_out, std_err = p.communicate(input=self.outdata)
+        #if std_err:
+        #    raise Exception("qrencodeError", std_err.strip())
+
+        code = pyqrcode.create(b32encode(self.outdata).replace('=', '/'), mode='alphanumeric')
+
+        self.outfile = StringIO.StringIO()
+        code.png(self.outfile, scale=self.scale)
         self.outfile.seek(0)
 
         if self.outfile and not self.outfile.closed:
@@ -87,29 +93,43 @@ class QRTun(object):
         except:
             print("Failed to write to tun!")
     def read_qrcode(self):
-        qr = qrtools.QR()
-        try:
-            if not qr.decode(self.infile):
+        width, height = self.inframe.size
+        raw = self.inframe.tobytes()
+        image = zbar.Image(width, height, 'Y800', raw)
+        result = self.scanner.scan(image)
+        if result == 0:
+            return False
+        else:
+            print "QR!"
+            for symbol in image:
+                pass
+            # clean up
+            del(image)
+            # Assuming data is encoded in utf8
+            try:
+                self.indata = {'body': b32decode(symbol.data.replace('/', '='))}
+                self.write_tun()
+                return True
+            except:
                 return False
-            #Hack to convert unicde to python string
-            body = qr.data.encode('latin-1')
-            self.indata = {'body': body}
-            self.write_tun()
-        except:
-            pass
 
 
+    def read_cam(self):
+        rval, frame = self.vc.read()
+        if not rval:
+            return False
+        self.inframe = scipy.misc.toimage(frame).convert('L')
+        return True
     def run(self):
         self.running = True
         while self.running:
             if self.read_tun():
                 self.write_qrcode()
-
-            rval, frame = self.vc.read()
-            if not rval:
+            
+            if not self.read_cam():
                 running = False
                 break
-            scipy.misc.toimage(frame).save(self.infile)
+            
             self.read_qrcode()
 
                
