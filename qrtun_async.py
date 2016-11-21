@@ -1,5 +1,4 @@
 import qrtools
-import pyqrcode
 from pytun import TunTapDevice, IFF_TAP, IFF_TUN, IFF_NO_PI
 import base64
 import sys
@@ -10,6 +9,7 @@ import cv2
 import scipy.misc
 import StringIO
 import pygame
+import subprocess
 SIZE = 1024
 
 class QRTun(object):
@@ -55,35 +55,17 @@ class QRTun(object):
         return False
     def write_qrcode(self):
 
-        #Could not get binary mode working with qrtool library... so instead opt to
-        # use base32 for now, obviously binary would be better.
-        #Base32 encode since alphanumeic qr code only allows A-Z, 0-9 and some
-        # symbols, but base64 uses lowercase as well....
-        #Also alphanumeric mode does not support '=', so replace with '/' and
-        # switch back on the other side...
-        #body = base64.b32encode(self.outdata).replace('=', '/')
-        #qr = qrtools.QR()
-        #qrb = qrtools.QR()
-        #qrb.data = "  "
-        #qr.data = body
-        code = pyqrcode.create(self.outdata, mode='binary', encoding='string_escape')
+        p = subprocess.Popen(['qrencode', '-o', '-', '-s', str(self.scale), '-8'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        std_out, std_err = p.communicate(input=self.outdata)
+        if std_err:
+            raise Exception("qrencodeError", std_err.strip())
+        
 
-        #Had an issue where decoded data did not match encoded data...
-        #So I just add plus symbols as padding until they match, then strip
-        # on the other side....
-        #while self.outdata != qrb.data:
-        #    #qr.pixel_size = 12
-        #    #qr.encode(self.outfile)
-        self.outfile = StringIO.StringIO()
-        code.png(self.outfile, scale=self.scale)
+        self.outfile = StringIO.StringIO(std_out)
+        #code.png(self.outfile, scale=self.scale)
         self.outfile.seek(0)
 
-        #    qrb.decode(self.outfile)
-        #    if qrb.data != qr.data:
-        #        print("EncodingFailure", qr.data)
-        #        qr.data += '+'
         if self.outfile and not self.outfile.closed:
-            #self.outfile = StringIO.StringIO(self.outfile.getvalue())
             pimg = pygame.image.load(self.outfile)
             if pimg.get_width() > self.screen.get_width() or pimg.get_height() > self.screen.get_height():
                 pygame.display.set_mode((pimg.get_width(), pimg.get_height()))

@@ -23,7 +23,7 @@ I have only tested on Ubuntu 16.04 and needed these packages:
 
 ```
 apt-get install qrencode git libzbar-dev python-pygame
-pip install python-pytun zbar pillow pyqrcode
+pip install python-pytun zbar pillow
 pip install git+https://github.com/primetang/qrtools.git
 ```
 
