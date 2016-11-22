@@ -22,7 +22,7 @@ You can use the up and down arrows to increase/decrease the size of the qr code.
 I have only tested on Ubuntu 16.04 and needed these packages:
 
 ```
-apt-get install qrencode git libzbar-dev python-pygame
+apt-get install qrencode git libzbar-dev python-pygame zbar-tools
 pip install python-pytun zbar pillow
 pip install git+https://github.com/primetang/qrtools.git
 ```
