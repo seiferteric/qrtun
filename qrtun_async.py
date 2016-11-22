@@ -1,6 +1,4 @@
 from pytun import TunTapDevice, IFF_TAP, IFF_TUN, IFF_NO_PI
-from base64 import b32encode, b32decode
-import pyqrcode
 import sys
 import select
 import signal
@@ -11,6 +9,7 @@ import StringIO
 import pygame
 import subprocess
 import zbar
+from base64 import b32encode, b32decode
 SIZE = 1024
 
 class QRTun(object):
@@ -48,6 +47,7 @@ class QRTun(object):
         pygame.event.set_allowed([pygame.KEYDOWN, pygame.QUIT])
         self.screen = pygame.display.set_mode((SIZE, SIZE))
         self.scale = 12
+        self.display_cam = False
         pygame.display.set_caption("qrtun - QR Code scale %d"%(self.scale))
     def read_tun(self):
         events = self.epoll.poll(0)
@@ -58,26 +58,28 @@ class QRTun(object):
     def write_qrcode(self):
 
 
-        #Sadly qrencode does not support \0 in binary mode!!! So I had to disable it and use the slower pyqrtools instead!
+        p = subprocess.Popen(['qrencode', '-o', '-', '-s', str(self.scale)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        std_out, std_err = p.communicate(input=b32encode(self.outdata).replace('=', '/'))
+        if std_err:
+            raise Exception("qrencodeError", std_err.strip())
 
-        #p = subprocess.Popen(['qrencode', '-o', '-', '-s', str(self.scale), '-8'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #std_out, std_err = p.communicate(input=self.outdata)
-        #if std_err:
-        #    raise Exception("qrencodeError", std_err.strip())
 
-        code = pyqrcode.create(b32encode(self.outdata).replace('=', '/'), mode='alphanumeric')
-
-        self.outfile = StringIO.StringIO()
-        code.png(self.outfile, scale=self.scale)
-        self.outfile.seek(0)
-
-        if self.outfile and not self.outfile.closed:
-            pimg = pygame.image.load(self.outfile)
-            if pimg.get_width() > self.screen.get_width() or pimg.get_height() > self.screen.get_height():
-                pygame.display.set_mode((pimg.get_width(), pimg.get_height()))
-            self.screen.fill((0,0,0))
-            self.screen.blit(pimg, (0,0))
+        self.outfile = StringIO.StringIO(std_out)
+        if self.display_cam:
+            cimg = StringIO.StringIO()
+            self.inframe.save(cimg, 'png')
+            cimg.seek(0)
+            cpimg = pygame.image.load(cimg)
+            self.screen.blit(cpimg, (0,0))
             pygame.display.flip()
+        else:
+            if self.outfile and not self.outfile.closed:
+                pimg = pygame.image.load(self.outfile)
+                if pimg.get_width() > self.screen.get_width() or pimg.get_height() > self.screen.get_height():
+                    pygame.display.set_mode((pimg.get_width(), pimg.get_height()))
+                self.screen.fill((0,0,0))
+                self.screen.blit(pimg, (0,0))
+                pygame.display.flip()
 
 
         self.msg_read = False
@@ -93,25 +95,25 @@ class QRTun(object):
         except:
             print("Failed to write to tun!")
     def read_qrcode(self):
-        width, height = self.inframe.size
-        raw = self.inframe.tobytes()
-        image = zbar.Image(width, height, 'Y800', raw)
-        result = self.scanner.scan(image)
-        if result == 0:
+        p = subprocess.Popen(['zbarimg', '-q', '--raw', 'PNG:-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        temp_png = StringIO.StringIO()
+        self.inframe.save(temp_png, 'png')
+        std_out, std_err = p.communicate(input=temp_png.getvalue())
+        if len(std_out) == 0:
             return False
-        else:
-            print "QR!"
-            for symbol in image:
-                pass
-            # clean up
-            del(image)
-            # Assuming data is encoded in utf8
-            try:
-                self.indata = {'body': b32decode(symbol.data.replace('/', '='))}
-                self.write_tun()
-                return True
-            except:
-                return False
+
+        if std_err:
+            raise Exception("zbarimg", std_err.strip())
+        #p = subprocess.Popen(['iconv', '-f', 'UTF-8', '-t', 'ISO-8859-1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        #std_out, std_err = p.communicate(input=std_out)
+        #if std_err:
+        #    raise Exception("iconv", std_err.strip())
+        try:
+            self.indata = {'body': b32decode(std_out.rstrip().replace('/', '='))}
+            self.write_tun()
+        except:
+            pass
 
 
     def read_cam(self):
@@ -119,11 +121,12 @@ class QRTun(object):
         if not rval:
             return False
         self.inframe = scipy.misc.toimage(frame).convert('L')
+        print "CAM"
         return True
     def run(self):
         self.running = True
         while self.running:
-            if self.read_tun():
+            if self.read_tun() or self.display_cam:
                 self.write_qrcode()
             
             if not self.read_cam():
@@ -149,6 +152,9 @@ class QRTun(object):
                 elif event.key == pygame.K_DOWN:
                     self.scale -= 1
                     pygame.display.set_caption("qrtun - QR Code scale %d"%(self.scale))
+                    self.write_qrcode()
+                elif event.key == pygame.K_SPACE:
+                    self.display_cam = not self.display_cam
                     self.write_qrcode()
  
         try:
