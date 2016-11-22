@@ -17,7 +17,7 @@ sudo python qrtun_async.py 2
 
 This will create a qrtun[1|2] interface with 10.0.8.[1|2] on each computer respectively. It will then start reading packets from that interface and show a qrcode in a window for the other to read. The data is base32 encoded due to limations in what characters you can encode in a alphanumeric qr code. Was going to use a tap device but had problems when packets were fragmented with pytun library, but just switched to a tun device and works now!
 
-You can use the up and down arrows to increase/decrease the size of the qr code
+You can use the up and down arrows to increase/decrease the size of the qr code. You can also press the space bar to toggle camera view mode to show what your camera sees, to help with alignment.
 
 I have only tested on Ubuntu 16.04 and needed these packages:
 
